@@ -107,9 +107,6 @@ Each complete run writes:
 - `sliding_window_<comparison>/`: windows, plot, threshold, genes, and GO terms.
 - `run_metadata.json`: parameters, software version, timestamp, and output paths.
 
-Output directories should not be committed. Archive analysis results in a
-versioned research repository such as Zenodo when they accompany a publication.
-
 ## Reproducibility
 
 TRAM records run parameters and uses deterministic seeds for data splitting,
