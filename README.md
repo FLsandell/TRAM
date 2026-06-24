@@ -1,4 +1,4 @@
-# TRAM
+# Tree Based Association Mapping (TRAM)
 
 TRAM identifies trait-associated genomic regions by tuning a random forest,
 summarizing SNP importance across repeated models, and testing genomic sliding
