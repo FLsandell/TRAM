@@ -11,3 +11,4 @@ All notable changes to TRAM will be documented here. The project follows
 - Reproducible random seeds and configurable scientific parameters.
 - Input validation, run metadata, automated tests, and publication metadata.
 - Tested support for Python 3.10 through 3.13.
+- Fast CLI help through lazy loading of scientific dependencies.

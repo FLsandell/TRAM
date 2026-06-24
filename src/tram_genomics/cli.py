@@ -6,10 +6,6 @@ import argparse
 from pathlib import Path
 
 from . import __version__
-from .modeling import train_replicates
-from .pipeline import run_pipeline
-from .sliding_window import sliding_window_analysis
-from .tuning import tune_model
 
 
 def _dataset_arguments(parser: argparse.ArgumentParser) -> None:
@@ -81,15 +77,23 @@ def main(argv: list[str] | None = None) -> int:
     arguments = vars(build_parser().parse_args(argv))
     command = arguments.pop("command")
     if command == "run":
+        from .pipeline import run_pipeline
+
         outputs = run_pipeline(**arguments)
         for name, path in outputs.items():
             print(f"{name}: {path}")
     elif command == "tune":
+        from .tuning import tune_model
+
         tune_model(**arguments)
     elif command == "model":
+        from .modeling import train_replicates
+
         summary = train_replicates(**arguments)
         print(f"summary: {summary}")
     elif command == "sliding-window":
+        from .sliding_window import sliding_window_analysis
+
         threshold = sliding_window_analysis(**arguments)
         print(f"significance threshold: {threshold}")
     return 0
@@ -97,4 +101,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
