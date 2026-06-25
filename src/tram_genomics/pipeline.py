@@ -38,6 +38,7 @@ def run_pipeline(**options: object) -> dict[str, str]:
         jobs=int(options["jobs"]),
     )
     sliding_output = output / f"sliding_window_{group_name(str(options['group1']), str(options['group2']))}"
+    print("TRAM: starting sliding-window analysis", flush=True)
     sliding_window_analysis(
         summary=summary,
         chromosome=options["chromosome"],

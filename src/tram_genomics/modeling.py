@@ -61,6 +61,7 @@ def train_replicates(
     reports: list[pd.DataFrame] = []
     mistakes: list[pd.DataFrame] = []
     feature_names = list(features.columns)
+    _print_progress(0, replicates)
 
     for run in range(1, replicates + 1):
         run_seed = seed + run - 1
@@ -79,10 +80,11 @@ def train_replicates(
         ).fit(train_encoded, y_train)
         predictions = classifier.predict(test_encoded)
 
-        offsets = np.cumsum([0, *[len(categories) for categories in one_hot.categories_]])
-        per_snp = [classifier.feature_importances_[offsets[i] : offsets[i + 1]].sum()
-                   for i in range(len(feature_names))]
-        importances.append(pd.DataFrame({"SNP": feature_names, "VarImp": per_snp, "Run": run}))
+        importances.append(pd.DataFrame({
+            "SNP": feature_names,
+            "VarImp": _snp_importances(classifier, one_hot),
+            "Run": run,
+        }))
 
         report = pd.DataFrame(classification_report(
             y_test,
@@ -99,32 +101,75 @@ def train_replicates(
         incorrect["Predicted_as"] = encoder.inverse_transform(predictions[y_test != predictions])
         incorrect["Run"] = run
         mistakes.append(incorrect)
+        _print_progress(run, replicates)
 
+    stem = comparison
     all_importances = pd.concat(importances, ignore_index=True)
-    summary = all_importances.groupby("SNP")["VarImp"].agg(
+    summary = _summarize_importances(all_importances)
+    summary_path = outpath / f"RF_varImpSummary_{stem}.txt"
+    summary.to_csv(summary_path, sep="\t", index=False)
+    all_importances.to_csv(outpath / f"RF_VarImp_{stem}.csv", sep="\t", index=False)
+    _write_model_reports(outpath, stem, all_importances, reports, mistakes)
+    return summary_path
+
+
+def _snp_importances(classifier: RandomForestClassifier, encoder: OneHotEncoder) -> np.ndarray:
+    offsets = np.cumsum([0, *[len(categories) for categories in encoder.categories_]])
+    return np.add.reduceat(classifier.feature_importances_, offsets[:-1])
+
+
+def _summarize_importances(importances: pd.DataFrame) -> pd.DataFrame:
+    summary = importances.groupby("SNP")["VarImp"].agg(
         ["mean", "max", "min", "std", "sum", "median", "count"]
     ).reset_index()
-    summary.columns = ["SNP", "VarImp_mean", "VarImp_max", "VarImp_min", "VarImp_std",
-                       "VarImp_sum", "VarImp_median", "VarImp_count"]
+    summary.columns = [
+        "SNP",
+        "VarImp_mean",
+        "VarImp_max",
+        "VarImp_min",
+        "VarImp_std",
+        "VarImp_sum",
+        "VarImp_median",
+        "VarImp_count",
+    ]
     coordinates = summary["SNP"].str.rsplit("_", n=1, expand=True)
     if coordinates.shape[1] != 2 or not pd.to_numeric(coordinates[1], errors="coerce").notna().all():
         raise ValueError("Every SNP identifier must end in '_<integer position>'")
     summary.insert(1, "seqid", coordinates[0])
     summary.insert(2, "POS", coordinates[1].astype(int))
+    return summary
 
-    stem = comparison
-    summary_path = outpath / f"RF_varImpSummary_{stem}.txt"
-    summary.to_csv(summary_path, sep="\t", index=False)
-    all_importances.to_csv(outpath / f"RF_VarImp_{stem}.csv", sep="\t", index=False)
+
+def _write_model_reports(
+    outpath: Path,
+    stem: str,
+    importances: pd.DataFrame,
+    reports: list[pd.DataFrame],
+    mistakes: list[pd.DataFrame],
+) -> None:
     all_reports = pd.concat(reports)
     all_reports.to_csv(outpath / f"RF_classReport_{stem}.txt", sep="\t")
+
     all_mistakes = pd.concat(mistakes) if mistakes else pd.DataFrame()
     all_mistakes.to_csv(outpath / f"RF_misclass_{stem}.txt", sep="\t", index=True)
-    occurrences = all_mistakes.groupby(level=0).size().rename("Occurrence") if not all_mistakes.empty else pd.Series(dtype=int, name="Occurrence")
+
+    occurrences = (
+        all_mistakes.groupby(level=0).size().rename("Occurrence")
+        if not all_mistakes.empty
+        else pd.Series(dtype=int, name="Occurrence")
+    )
     occurrences.to_csv(outpath / f"RF_misclassSummary_{stem}.txt", sep="\t")
+
     accuracy = all_reports.loc[all_reports.index == "accuracy", "f1-score"]
     accuracy.agg(["mean", "median", "std"]).to_csv(outpath / f"RF_accuracySummary_{stem}.txt", sep="\t")
-    all_importances["VarImp"].agg(["median", "mean", "std", "max", "min", "sum", "count"]).to_csv(
+    importances["VarImp"].agg(["median", "mean", "std", "max", "min", "sum", "count"]).to_csv(
         outpath / f"RF_genomeVarImp_Summary_{stem}.txt", sep="\t"
     )
-    return summary_path
+
+
+def _print_progress(done: int, total: int) -> None:
+    width = 30
+    filled = int(width * done / total)
+    bar = "#" * filled + "-" * (width - filled)
+    end = "\n" if done == total else "\r"
+    print(f"TRAM models: [{bar}] {done}/{total}", end=end, flush=True)

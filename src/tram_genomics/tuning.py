@@ -7,7 +7,6 @@ from pathlib import Path
 
 import numpy as np
 from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
-from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 from sklearn.preprocessing import OneHotEncoder
@@ -40,6 +39,7 @@ def tune_model(
             f"Each group needs at least {cv_folds} training samples for {cv_folds}-fold CV"
         )
     cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
+    encoded_train = OneHotEncoder(handle_unknown="ignore").fit_transform(x_train)
     space = {
         "n_estimators": hp.quniform("n_estimators", 200, 999, 1),
         "max_depth": hp.quniform("max_depth", 1, 64, 1),
@@ -51,12 +51,8 @@ def tune_model(
 
     def objective(candidate: dict[str, object]) -> dict[str, object]:
         params = _coerce_parameters(candidate)
-        preprocessor = ColumnTransformer(
-            [("genotype", OneHotEncoder(handle_unknown="ignore"), list(features.columns))]
-        )
-        encoded = preprocessor.fit_transform(x_train)
         classifier = RandomForestClassifier(**params, random_state=seed, n_jobs=jobs)
-        score = cross_val_score(classifier, encoded, y_train, scoring="roc_auc", cv=cv).mean()
+        score = cross_val_score(classifier, encoded_train, y_train, scoring="roc_auc", cv=cv).mean()
         return {"loss": -float(score), "status": STATUS_OK}
 
     trials = Trials()
