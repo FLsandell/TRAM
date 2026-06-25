@@ -47,7 +47,12 @@ def tiny_data(tmp_path: Path) -> dict[str, Path]:
     matrix.to_csv(files["matrix"], sep="\t", index=False)
     groups.to_csv(files["groups"], sep="\t", index=False)
     chromosomes.to_csv(files["chromosome"], sep="\t", index=False)
-    functions.to_csv(files["function"], sep="\t", index=False)
+    files["function"].write_text(
+        "## example eggNOG-mapper output\n"
+        "## command metadata\n",
+        encoding="utf-8",
+    )
+    functions.to_csv(files["function"], sep="\t", index=False, mode="a")
     go.to_csv(files["database"], sep="\t", index=False)
     files["gff"].write_text(
         "##gff-version 3\n"
@@ -64,4 +69,3 @@ def tiny_data(tmp_path: Path) -> dict[str, Path]:
         "bootstrap": True,
     }), encoding="utf-8")
     return files
-

@@ -41,6 +41,16 @@ def _read_gff(path: str | Path) -> pd.DataFrame:
     return pd.read_csv(path, sep="\t", comment="#", header=None, names=columns)
 
 
+def _read_function_annotations(path: str | Path) -> pd.DataFrame:
+    """Read eggNOG annotation tables with or without leading metadata lines."""
+    path = Path(path)
+    with path.open(encoding="utf-8") as handle:
+        for index, line in enumerate(handle):
+            if line.startswith("#query\t"):
+                return pd.read_csv(path, sep="\t", skiprows=index)
+    return pd.read_csv(path, sep="\t")
+
+
 def sliding_window_analysis(
     summary: str | Path,
     chromosome: str | Path,
@@ -68,7 +78,7 @@ def sliding_window_analysis(
     output.mkdir(parents=True, exist_ok=True)
     variants = pd.read_csv(summary, sep="\t")
     chromosomes = pd.read_csv(chromosome, sep="\t")
-    functions = pd.read_csv(function, sep="\t")
+    functions = _read_function_annotations(function)
     go_database = pd.read_csv(database, sep="\t")
     require_columns(variants, {"seqid", "POS", "VarImp_sum"}, summary)
     require_columns(chromosomes, {"seqid", "end", "CHR"}, chromosome)

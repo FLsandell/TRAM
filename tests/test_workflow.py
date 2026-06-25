@@ -1,5 +1,7 @@
+import json
 from pathlib import Path
 
+import pandas as pd
 from tram_genomics.modeling import train_replicates
 from tram_genomics.pipeline import run_pipeline
 from tram_genomics.sliding_window import sliding_window_analysis
@@ -39,6 +41,35 @@ def test_modeling_and_sliding_window_smoke(tiny_data, tmp_path):
     assert threshold >= 0
     assert (sliding_output / "windows_plot.png").exists()
     assert (sliding_output / "translated_go_terms.txt").exists()
+
+
+def test_model_summary_counts_only_nonzero_importance_runs(tiny_data, tmp_path):
+    model = tmp_path / "small_model.json"
+    model.write_text(json.dumps({
+        "n_estimators": 1,
+        "max_depth": 1,
+        "max_features": 1,
+        "min_samples_split": 2,
+        "min_samples_leaf": 1,
+        "bootstrap": True,
+    }), encoding="utf-8")
+    summary = train_replicates(
+        matrix=tiny_data["matrix"],
+        groups=tiny_data["groups"],
+        target="SP_CODE",
+        group1="Red",
+        group2="Fodder",
+        output=tmp_path / "output",
+        model=model,
+        replicates=3,
+        jobs=1,
+    )
+    varimp = pd.read_csv(summary.parent / "RF_VarImp_Red-Fodder.csv", sep="\t")
+    table = pd.read_csv(summary, sep="\t")
+
+    assert (varimp["VarImp"] > 0).all()
+    assert table["VarImp_count"].max() <= 3
+    assert table["VarImp_count"].min() < 3
 
 
 def test_complete_pipeline_writes_metadata(tiny_data, tmp_path):

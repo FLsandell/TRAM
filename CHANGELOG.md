@@ -13,3 +13,4 @@ All notable changes to TRAM will be documented here. The project follows
 - Tested support for Python 3.10 through 3.13.
 - Fast CLI help through lazy loading of scientific dependencies.
 - Model replicate progress bar and faster SNP importance aggregation.
+- Support eggNOG annotation files with metadata lines before the `#query` header.

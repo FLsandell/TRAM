@@ -80,11 +80,12 @@ def train_replicates(
         ).fit(train_encoded, y_train)
         predictions = classifier.predict(test_encoded)
 
-        importances.append(pd.DataFrame({
+        feature_importance = pd.DataFrame({
             "SNP": feature_names,
             "VarImp": _snp_importances(classifier, one_hot),
             "Run": run,
-        }))
+        })
+        importances.append(feature_importance.loc[feature_importance["VarImp"] > 0])
 
         report = pd.DataFrame(classification_report(
             y_test,
@@ -119,11 +120,10 @@ def _snp_importances(classifier: RandomForestClassifier, encoder: OneHotEncoder)
 
 
 def _summarize_importances(importances: pd.DataFrame) -> pd.DataFrame:
-    summary = importances.groupby("SNP")["VarImp"].agg(
-        ["mean", "max", "min", "std", "sum", "median", "count"]
-    ).reset_index()
-    summary.columns = [
+    columns = [
         "SNP",
+        "seqid",
+        "POS",
         "VarImp_mean",
         "VarImp_max",
         "VarImp_min",
@@ -132,6 +132,13 @@ def _summarize_importances(importances: pd.DataFrame) -> pd.DataFrame:
         "VarImp_median",
         "VarImp_count",
     ]
+    if importances.empty:
+        return pd.DataFrame(columns=columns)
+
+    summary = importances.groupby("SNP")["VarImp"].agg(
+        ["mean", "max", "min", "std", "sum", "median", "count"]
+    ).reset_index()
+    summary.columns = [column for column in columns if column not in {"seqid", "POS"}]
     coordinates = summary["SNP"].str.rsplit("_", n=1, expand=True)
     if coordinates.shape[1] != 2 or not pd.to_numeric(coordinates[1], errors="coerce").notna().all():
         raise ValueError("Every SNP identifier must end in '_<integer position>'")
