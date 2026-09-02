@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 
 from .io import require_columns
 
+WINDOW_GENE_COLUMNS = ["window_CHR", "window_seqid", "window_start", "window_end", "window_VarImp_sum"]
+
 
 def _window_sums(positions: np.ndarray, weights: np.ndarray, starts: np.ndarray, window_size: int) -> np.ndarray:
     """Sum weighted positions into inclusive, overlapping windows."""
@@ -26,7 +28,13 @@ def _window_sums(positions: np.ndarray, weights: np.ndarray, starts: np.ndarray,
     valid = right > left
     np.add.at(changes, left[valid], weights[valid])
     np.add.at(changes, right[valid], -weights[valid])
-    return np.cumsum(changes[:-1])
+    sums = np.cumsum(changes[:-1])
+    negative = sums < 0
+    if negative.any():
+        if (sums[negative] < -1e-12).any():
+            raise ValueError("Window sums became negative; check that VarImp_sum values are non-negative")
+        sums[negative] = 0.0
+    return sums
 
 
 def _randomized_windows(task: tuple[int, np.ndarray, int, np.ndarray, int]) -> np.ndarray:
@@ -38,7 +46,22 @@ def _randomized_windows(task: tuple[int, np.ndarray, int, np.ndarray, int]) -> n
 
 def _read_gff(path: str | Path) -> pd.DataFrame:
     columns = ["seqid", "source", "TYPE", "START", "STOP", "score", "strand", "phase", "attributes"]
-    return pd.read_csv(path, sep="\t", comment="#", header=None, names=columns)
+    rows = []
+    with Path(path).open(encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip() or line.startswith("#"):
+                continue
+            fields = line.rstrip("\n").split("\t")
+            if len(fields) < len(columns):
+                continue
+            if len(fields) > len(columns):
+                fields = fields[:8] + [";".join(fields[8:])]
+            rows.append(fields)
+    table = pd.DataFrame(rows, columns=columns)
+    if not table.empty:
+        table["START"] = pd.to_numeric(table["START"], errors="coerce")
+        table["STOP"] = pd.to_numeric(table["STOP"], errors="coerce")
+    return table
 
 
 def _read_function_annotations(path: str | Path) -> pd.DataFrame:
@@ -133,7 +156,7 @@ def sliding_window_analysis(
 
     genes = _annotate_genes(all_windows, threshold, _read_gff(gff), functions, window_size)
     genes.to_csv(output / "genes.txt", sep="\t", index=False)
-    interesting_columns = ["#query", "Description", "GOs", "KEGG_ko", "PFAMs"]
+    interesting_columns = ["#query", *WINDOW_GENE_COLUMNS, "Description", "GOs", "KEGG_ko", "PFAMs"]
     interesting = genes.reindex(columns=interesting_columns)
     interesting.to_csv(output / "genes_interesting.txt", sep="\t", index=False)
 
@@ -153,7 +176,7 @@ def _annotate_genes(
     window_size: int,
 ) -> pd.DataFrame:
     genes = gff.loc[gff["TYPE"] == "gene"].copy()
-    identifiers: set[str] = set()
+    window_hits: dict[str, dict[str, object]] = {}
     for window in windows.loc[windows["VarImp_sum"] > threshold].itertuples(index=False):
         overlaps = genes.loc[
             (genes["seqid"] == window.seqid)
@@ -163,14 +186,39 @@ def _annotate_genes(
         for attributes in overlaps["attributes"].dropna():
             fields = dict(part.split("=", 1) for part in str(attributes).split(";") if "=" in part)
             if "ID" in fields:
-                identifiers.add(fields["ID"])
-    if not identifiers:
-        return functions.iloc[0:0].copy()
+                identifier = fields["ID"]
+                if identifier in window_hits and window.VarImp_sum <= window_hits[identifier]["window_VarImp_sum"]:
+                    continue
+                window_hits[identifier] = {
+                    "window_CHR": window.CHR,
+                    "window_seqid": window.seqid,
+                    "window_start": window.POS,
+                    "window_end": window.POS + window_size,
+                    "window_VarImp_sum": window.VarImp_sum,
+                }
+    if not window_hits:
+        return _empty_annotated_functions(functions)
+
     query = functions["#query"].astype(str)
-    mask = pd.Series(False, index=functions.index)
-    for identifier in identifiers:
-        mask |= query.eq(identifier) | query.str.startswith(f"{identifier}.")
-    return functions.loc[mask].drop_duplicates().copy()
+    annotated = []
+    for identifier, window_hit in window_hits.items():
+        mask = query.eq(identifier) | query.str.startswith(f"{identifier}.")
+        if not mask.any():
+            continue
+        matched = functions.loc[mask].copy()
+        for column, value in window_hit.items():
+            matched[column] = value
+        annotated.append(matched)
+    if not annotated:
+        return _empty_annotated_functions(functions)
+    return pd.concat(annotated, ignore_index=True).drop_duplicates().copy()
+
+
+def _empty_annotated_functions(functions: pd.DataFrame) -> pd.DataFrame:
+    empty = functions.iloc[0:0].copy()
+    for column in WINDOW_GENE_COLUMNS:
+        empty[column] = pd.Series(dtype=float if column == "window_VarImp_sum" else object)
+    return empty
 
 
 def _plot_windows(windows: pd.DataFrame, threshold: float, destination: Path) -> None:
