@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 from . import __version__
+from .selection import DEFAULT_LOG_LOSS_TOLERANCE, DEFAULT_ROC_AUC_TOLERANCE
 
 
 def _dataset_arguments(parser: argparse.ArgumentParser) -> None:
@@ -47,6 +48,18 @@ def build_parser() -> argparse.ArgumentParser:
     _sliding_arguments(run, include_summary=False)
     run.add_argument("-o", "--output", type=Path, required=True, help="Output directory")
     run.add_argument("--rounds", type=int, required=True, help="Hyperparameter evaluations")
+    run.add_argument(
+        "--roc-auc-tolerance",
+        type=float,
+        default=DEFAULT_ROC_AUC_TOLERANCE,
+        help="Near-best ROC-AUC tolerance for log-loss tie-breaking (default: 0.001)",
+    )
+    run.add_argument(
+        "--log-loss-tolerance",
+        type=float,
+        default=DEFAULT_LOG_LOSS_TOLERANCE,
+        help="Effective log-loss tie tolerance for RF-complexity tie-breaking (default: 0.001)",
+    )
     run.add_argument("--cv-folds", type=int, default=5, help="Tuning CV folds (default: 5)")
     run.add_argument("--replicates", type=int, default=100, help="Repeated models (default: 100)")
     run.add_argument("--test-size", type=float, default=0.25, help="Test fraction (default: 0.25)")
@@ -56,6 +69,18 @@ def build_parser() -> argparse.ArgumentParser:
     _compute_arguments(tune)
     tune.add_argument("-o", "--output-prefix", type=Path, required=True, help="Model output prefix")
     tune.add_argument("--rounds", type=int, required=True, help="Hyperparameter evaluations")
+    tune.add_argument(
+        "--roc-auc-tolerance",
+        type=float,
+        default=DEFAULT_ROC_AUC_TOLERANCE,
+        help="Near-best ROC-AUC tolerance for log-loss tie-breaking (default: 0.001)",
+    )
+    tune.add_argument(
+        "--log-loss-tolerance",
+        type=float,
+        default=DEFAULT_LOG_LOSS_TOLERANCE,
+        help="Effective log-loss tie tolerance for RF-complexity tie-breaking (default: 0.001)",
+    )
     tune.add_argument("--cv-folds", type=int, default=5, help="Cross-validation folds (default: 5)")
 
     model = commands.add_parser("model", help="Train repeated random-forest models")

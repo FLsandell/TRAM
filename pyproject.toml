@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tram-genomics"
-version = "1.0.0"
+version = "2.0.0"
 description = "Trait-associated region analysis with random forests and genomic sliding windows"
 readme = "README.md"
 requires-python = ">=3.10"

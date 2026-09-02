@@ -3,6 +3,18 @@
 All notable changes to TRAM will be documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-09-02
+
+### Changed
+
+- Hyperopt still optimizes mean cross-validation ROC-AUC as its primary loss.
+- Final model selection now uses out-of-fold log loss for trials within 0.001
+  ROC-AUC of the best trial, with both tolerances configurable from the CLI.
+- Effectively tied metric results now prefer a more regularized random forest;
+  tree count is deliberately the final complexity consideration.
+- Tuning writes a JSON audit containing every trial's metrics, parameters,
+  complexity key, selection tolerances, and selected trial.
+
 ## [1.0.0] - 2026-06-23
 
 ### Added

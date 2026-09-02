@@ -10,12 +10,16 @@ from pathlib import Path
 from . import __version__
 from .io import group_name
 from .modeling import train_replicates
+from .selection import DEFAULT_LOG_LOSS_TOLERANCE, DEFAULT_ROC_AUC_TOLERANCE
 from .sliding_window import sliding_window_analysis
 from .tuning import tune_model
 
 
 def run_pipeline(**options: object) -> dict[str, str]:
     """Run all three stages and return the principal output paths."""
+    options = dict(options)
+    options.setdefault("roc_auc_tolerance", DEFAULT_ROC_AUC_TOLERANCE)
+    options.setdefault("log_loss_tolerance", DEFAULT_LOG_LOSS_TOLERANCE)
     output = Path(str(options["output"])).resolve()
     output.mkdir(parents=True, exist_ok=True)
     model_prefix = output / "rf_tuned_model"
@@ -27,6 +31,8 @@ def run_pipeline(**options: object) -> dict[str, str]:
         seed=int(options["seed"]),
         cv_folds=int(options["cv_folds"]),
         jobs=int(options["jobs"]),
+        roc_auc_tolerance=float(options["roc_auc_tolerance"]),
+        log_loss_tolerance=float(options["log_loss_tolerance"]),
     )
     summary = train_replicates(
         **common,
@@ -56,6 +62,7 @@ def run_pipeline(**options: object) -> dict[str, str]:
     )
     result = {
         "model": str(Path(f"{model_prefix}.model")),
+        "tuning": str(Path(f"{model_prefix}.tuning.json")),
         "summary": str(summary),
         "sliding_output": str(sliding_output),
     }

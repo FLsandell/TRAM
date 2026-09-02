@@ -40,6 +40,22 @@ The standard analysis runs 100 replicate models, 999 null randomizations,
 10,000 bp windows, and 5,000 bp steps. Use `tram run --help` to inspect and
 change every analysis parameter.
 
+### Hyperparameter selection
+
+TRAM 2 selects the tuned random forest hierarchically:
+
+1. Hyperopt primarily maximizes mean cross-validation ROC-AUC.
+2. Among trials within `--roc-auc-tolerance` of the best ROC-AUC (default
+   `0.001`), TRAM minimizes log loss calculated from pooled out-of-fold
+   probabilities.
+3. If log loss is also within `--log-loss-tolerance` (default `0.001`), TRAM
+   prefers the more regularized forest: larger `min_samples_leaf`, smaller
+   `max_depth`, fewer features per split, then larger `min_samples_split`.
+   Tree count is considered last.
+
+Each tuning run writes `rf_tuned_model.tuning.json` with the policy, metrics,
+parameters, and complexity key for every trial, plus the selected trial.
+
 The three stages can also be executed independently:
 
 ```bash
@@ -102,7 +118,10 @@ columns such as `name` and `namespace`.
 
 Each complete run writes:
 
-- `rf_tuned_model.model` and `.loss`: optimized model parameters and loss.
+- `rf_tuned_model.model` and `.loss`: selected model parameters and negative
+  mean CV ROC-AUC.
+- `rf_tuned_model.tuning.json`: hierarchical selection policy and complete
+  per-trial tuning audit.
 - `<comparison>/replicates/`: model reports and SNP importance summaries.
 - `sliding_window_<comparison>/`: windows, plot, threshold, genes, and GO terms.
 - `run_metadata.json`: parameters, software version, timestamp, and output paths.

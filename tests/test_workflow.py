@@ -166,6 +166,14 @@ def test_complete_pipeline_writes_metadata(tiny_data, tmp_path):
         window_size=200,
         step_size=100,
         significance_quantile=0.9,
+        roc_auc_tolerance=0.002,
+        log_loss_tolerance=0.003,
     )
     assert all(Path(path).exists() for path in result.values())
     assert (output / "run_metadata.json").exists()
+    tuning = json.loads(Path(result["tuning"]).read_text(encoding="utf-8"))
+    assert tuning["selection_policy"]["primary"] == "highest mean CV ROC-AUC"
+    assert tuning["selection_policy"]["roc_auc_tolerance"] == 0.002
+    assert tuning["selection_policy"]["log_loss_tolerance"] == 0.003
+    assert tuning["selected_trial"]["mean_cv_roc_auc"] >= 0
+    assert tuning["selected_trial"]["oof_log_loss"] >= 0
