@@ -6,7 +6,7 @@ def test_cli_reports_version(capsys):
         main(["--version"])
     except SystemExit as error:
         assert error.code == 0
-    assert "TRAM 2.0.0" in capsys.readouterr().out
+    assert "TRAM 1.1.0" in capsys.readouterr().out
 
 
 def test_tune_accepts_hierarchical_selection_tolerances():

@@ -3,7 +3,15 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from tram_genomics.modeling import train_replicates
+import tram_genomics.modeling as modeling
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder
+from tram_genomics.modeling import (
+    _snp_importances,
+    _split_preencoded_features,
+    train_replicates,
+)
 from tram_genomics.pipeline import run_pipeline
 from tram_genomics.sliding_window import _annotate_genes, _read_gff, _window_sums, sliding_window_analysis
 
@@ -139,6 +147,150 @@ def test_model_summary_counts_only_nonzero_importance_runs(tiny_data, tmp_path):
     assert (varimp["VarImp"] > 0).all()
     assert table["VarImp_count"].max() <= 3
     assert table["VarImp_count"].min() < 3
+
+
+def test_replicates_fit_one_hot_encoder_only_once(tiny_data, tmp_path, monkeypatch):
+    original_encoder = modeling.OneHotEncoder
+
+    class CountingEncoder(original_encoder):
+        fit_transform_calls = 0
+
+        def fit_transform(self, *args, **kwargs):
+            type(self).fit_transform_calls += 1
+            return super().fit_transform(*args, **kwargs)
+
+    monkeypatch.setattr(modeling, "OneHotEncoder", CountingEncoder)
+
+    train_replicates(
+        matrix=tiny_data["matrix"],
+        groups=tiny_data["groups"],
+        target="SP_CODE",
+        group1="Red",
+        group2="Fodder",
+        output=tmp_path / "output",
+        model=tiny_data["model"],
+        replicates=3,
+        jobs=1,
+    )
+
+    assert CountingEncoder.fit_transform_calls == 1
+
+
+def test_preencoded_replicate_matches_previous_training_fitted_encoding():
+    features = np.array([
+        [0, 0, -1, -128],
+        [0, 0, 0, -128],
+        [0, 1, 0, 127],
+        [0, 1, 1, 127],
+        [0, 0, 1, -128],
+        [0, 1, 0, 127],
+        [0, 0, 1, -128],
+        [0, 1, 0, 127],
+        [0, 2, -1, 127],
+        [0, 2, 1, -128],
+        [0, 2, 0, 127],
+        [0, 2, 1, -128],
+    ], dtype=np.int8)
+    train_indices = np.arange(8)
+    test_indices = np.arange(8, 12)
+    train_labels = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+
+    previous_encoder = OneHotEncoder(handle_unknown="ignore")
+    previous_train = previous_encoder.fit_transform(features[train_indices])
+    previous_test = previous_encoder.transform(features[test_indices])
+
+    global_encoder = OneHotEncoder(handle_unknown="ignore", dtype=np.float32)
+    globally_encoded = global_encoder.fit_transform(features)
+    full_category_counts = np.asarray(globally_encoded.getnnz(axis=0)).ravel()
+    new_train, new_test, active_categories = _split_preencoded_features(
+        globally_encoded,
+        full_category_counts,
+        train_indices,
+        test_indices,
+    )
+
+    np.testing.assert_array_equal(new_train.toarray(), previous_train.toarray())
+    np.testing.assert_array_equal(new_test.toarray(), previous_test.toarray())
+
+    global_category_snps = np.repeat(
+        np.arange(features.shape[1]),
+        [len(categories) for categories in global_encoder.categories_],
+    )
+    previous_category_snps = np.repeat(
+        np.arange(features.shape[1]),
+        [len(categories) for categories in previous_encoder.categories_],
+    )
+    np.testing.assert_array_equal(
+        global_category_snps[active_categories],
+        previous_category_snps,
+    )
+
+    parameters = {
+        "n_estimators": 20,
+        "max_depth": 4,
+        "max_features": "sqrt",
+        "random_state": 31,
+        "n_jobs": 1,
+    }
+    previous_model = RandomForestClassifier(**parameters).fit(
+        previous_train,
+        train_labels,
+    )
+    new_model = RandomForestClassifier(**parameters).fit(new_train, train_labels)
+    np.testing.assert_array_equal(
+        new_model.predict(new_test),
+        previous_model.predict(previous_test),
+    )
+    np.testing.assert_array_equal(
+        new_model.feature_importances_,
+        previous_model.feature_importances_,
+    )
+
+    previous_offsets = np.cumsum(
+        [0, *[len(categories) for categories in previous_encoder.categories_]]
+    )
+    previous_snp_importances = np.add.reduceat(
+        previous_model.feature_importances_,
+        previous_offsets[:-1],
+    )
+    new_snp_importances = _snp_importances(
+        new_model,
+        global_category_snps[active_categories],
+        features.shape[1],
+    )
+    np.testing.assert_allclose(new_snp_importances, previous_snp_importances)
+
+
+def test_index_split_preserves_previous_misclassification_order():
+    features = pd.DataFrame(
+        {"snp": np.arange(12)},
+        index=[f"sample-{index}" for index in range(12)],
+    )
+    labels = np.array([0] * 6 + [1] * 6)
+    old_train, old_test, old_y_train, old_y_test = train_test_split(
+        features,
+        labels,
+        stratify=labels,
+        test_size=0.25,
+        random_state=37,
+    )
+    train_indices, test_indices, new_y_train, new_y_test = train_test_split(
+        np.arange(len(features)),
+        labels,
+        stratify=labels,
+        test_size=0.25,
+        random_state=37,
+    )
+
+    assert old_train.index.equals(features.iloc[train_indices].index)
+    assert old_test.index.equals(features.iloc[test_indices].index)
+    np.testing.assert_array_equal(new_y_train, old_y_train)
+    np.testing.assert_array_equal(new_y_test, old_y_test)
+
+    incorrect_mask = np.array([True, False, True])
+    assert old_test.loc[incorrect_mask].index.equals(
+        features.iloc[test_indices[incorrect_mask]].index
+    )
 
 
 def test_complete_pipeline_writes_metadata(tiny_data, tmp_path):

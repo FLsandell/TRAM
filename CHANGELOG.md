@@ -3,7 +3,7 @@
 All notable changes to TRAM will be documented here. The project follows
 [Semantic Versioning](https://semver.org/).
 
-## [2.0.0] - 2026-09-02
+## [1.1.0] - 2026-09-04
 
 ### Changed
 
@@ -14,6 +14,12 @@ All notable changes to TRAM will be documented here. The project follows
   tree count is deliberately the final complexity consideration.
 - Tuning writes a JSON audit containing every trial's metrics, parameters,
   complexity key, selection tolerances, and selected trial.
+- Repeated modeling now performs one-hot encoding once per invocation instead
+  of repeating it for every replicate, while preserving each training split's
+  category vocabulary and feature-importance mapping.
+- One-hot matrices use 32-bit values, matching scikit-learn's internal random
+  forest representation and limiting the additional memory retained by the
+  reusable encoding.
 
 ## [1.0.0] - 2026-06-23
 

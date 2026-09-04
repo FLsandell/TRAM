@@ -42,7 +42,7 @@ change every analysis parameter.
 
 ### Hyperparameter selection
 
-TRAM 2 selects the tuned random forest hierarchically:
+TRAM 1.1 selects the tuned random forest hierarchically:
 
 1. Hyperopt primarily maximizes mean cross-validation ROC-AUC.
 2. Among trials within `--roc-auc-tolerance` of the best ROC-AUC (default
@@ -132,6 +132,15 @@ TRAM records run parameters and uses deterministic seeds for data splitting,
 random forests, hyperparameter search, and null randomization. Record the TRAM
 release, Python environment, input checksums, reference genome version, and
 annotation versions in any publication.
+
+## Memory requirements
+
+The repeated-model stage keeps one reusable sparse one-hot matrix in memory
+and creates sparse train/test slices for each replicate. Memory therefore
+scales with the number of selected samples, SNPs, and observed genotype
+categories. A benchmark-based estimate for 321 samples and 5,155,710 SNPs is
+approximately 47--50 GB peak memory; allocate at least 64 GB for a dataset of
+that size. Smaller datasets require proportionally less memory.
 
 The randomized-window matrix is held in a temporary disk-backed array, so large
 genomes require sufficient temporary storage in the output filesystem.

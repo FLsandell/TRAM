@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -61,20 +62,40 @@ def train_replicates(
     reports: list[pd.DataFrame] = []
     mistakes: list[pd.DataFrame] = []
     feature_names = list(features.columns)
+    sample_indices = np.arange(len(features))
+    one_hot = OneHotEncoder(handle_unknown="ignore", dtype=np.float32)
+    encoded_features = one_hot.fit_transform(
+        features.to_numpy(dtype=np.int8, copy=False)
+    )
+    category_counts = np.fromiter(
+        (len(categories) for categories in one_hot.categories_),
+        dtype=np.int64,
+        count=len(feature_names),
+    )
+    encoded_feature_snps = np.repeat(
+        np.arange(len(feature_names), dtype=np.int64),
+        category_counts,
+    )
+    full_category_counts = np.asarray(
+        encoded_features.getnnz(axis=0)
+    ).ravel()
     _print_progress(0, replicates)
 
     for run in range(1, replicates + 1):
         run_seed = seed + run - 1
-        x_train, x_test, y_train, y_test = train_test_split(
-            features,
+        train_indices, test_indices, y_train, y_test = train_test_split(
+            sample_indices,
             encoded_labels,
             stratify=encoded_labels,
             test_size=test_size,
             random_state=run_seed,
         )
-        one_hot = OneHotEncoder(handle_unknown="ignore")
-        train_encoded = one_hot.fit_transform(x_train)
-        test_encoded = one_hot.transform(x_test)
+        train_encoded, test_encoded, active_categories = _split_preencoded_features(
+            encoded_features,
+            full_category_counts,
+            train_indices,
+            test_indices,
+        )
         classifier = RandomForestClassifier(
             **parameters, random_state=run_seed, n_jobs=jobs
         ).fit(train_encoded, y_train)
@@ -82,7 +103,11 @@ def train_replicates(
 
         feature_importance = pd.DataFrame({
             "SNP": feature_names,
-            "VarImp": _snp_importances(classifier, one_hot),
+            "VarImp": _snp_importances(
+                classifier,
+                encoded_feature_snps[active_categories],
+                len(feature_names),
+            ),
             "Run": run,
         })
         importances.append(feature_importance.loc[feature_importance["VarImp"] > 0])
@@ -97,9 +122,10 @@ def train_replicates(
         report["Run"] = run
         reports.append(report)
 
-        incorrect = x_test.loc[y_test != predictions].copy()
-        incorrect[target] = encoder.inverse_transform(y_test[y_test != predictions])
-        incorrect["Predicted_as"] = encoder.inverse_transform(predictions[y_test != predictions])
+        incorrect_mask = y_test != predictions
+        incorrect = features.iloc[test_indices[incorrect_mask]].copy()
+        incorrect[target] = encoder.inverse_transform(y_test[incorrect_mask])
+        incorrect["Predicted_as"] = encoder.inverse_transform(predictions[incorrect_mask])
         incorrect["Run"] = run
         mistakes.append(incorrect)
         _print_progress(run, replicates)
@@ -114,9 +140,30 @@ def train_replicates(
     return summary_path
 
 
-def _snp_importances(classifier: RandomForestClassifier, encoder: OneHotEncoder) -> np.ndarray:
-    offsets = np.cumsum([0, *[len(categories) for categories in encoder.categories_]])
-    return np.add.reduceat(classifier.feature_importances_, offsets[:-1])
+def _split_preencoded_features(
+    encoded_features: Any,
+    full_category_counts: np.ndarray,
+    train_indices: np.ndarray,
+    test_indices: np.ndarray,
+) -> tuple[Any, Any, np.ndarray]:
+    """Split a global encoding while retaining only training-seen categories."""
+    test_encoded = encoded_features[test_indices]
+    test_category_counts = np.asarray(test_encoded.getnnz(axis=0)).ravel()
+    active_categories = full_category_counts > test_category_counts
+    train_encoded = encoded_features[train_indices][:, active_categories]
+    return train_encoded, test_encoded[:, active_categories], active_categories
+
+
+def _snp_importances(
+    classifier: RandomForestClassifier,
+    encoded_feature_snps: np.ndarray,
+    snp_count: int,
+) -> np.ndarray:
+    return np.bincount(
+        encoded_feature_snps,
+        weights=classifier.feature_importances_,
+        minlength=snp_count,
+    )
 
 
 def _summarize_importances(importances: pd.DataFrame) -> pd.DataFrame:
