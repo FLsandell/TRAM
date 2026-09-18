@@ -25,15 +25,15 @@ tram run \
   --matrix data/genotypes.tsv \
   --groups data/phenotypes.tsv \
   --target SP_CODE \
-  --group1 Red \
-  --group2 Fodder \
+  --group1 Group_A \
+  --group2 Group_B \
   --chromosome data/chromosomes.tsv \
   --gff data/genes.gff3 \
   --database data/go_terms.tsv \
   --function data/functions.tsv \
   --repeat-fraction 0.42 \
   --rounds 100 \
-  --output outputs/red-fodder
+  --output outputs/group-a-group-b
 ```
 
 The standard analysis runs 100 replicate models, 999 null randomizations,
@@ -87,8 +87,8 @@ two group values.
 
 ```text
 ID        SP_CODE
-sample01  Red
-sample02  Fodder
+sample01  Group_A
+sample02  Group_B
 ```
 
 ### Chromosomes and scaffolds

@@ -17,7 +17,7 @@ def tiny_data(tmp_path: Path) -> dict[str, Path]:
             for i, sample in enumerate(samples)
         },
     })
-    groups = pd.DataFrame({"ID": samples, "SP_CODE": ["Red"] * 6 + ["Fodder"] * 6})
+    groups = pd.DataFrame({"ID": samples, "SP_CODE": ["Group_A"] * 6 + ["Group_B"] * 6})
     chromosomes = pd.DataFrame({
         "seqid": ["scaffold_1", "scaffold_2"],
         "end": [1000, 600],

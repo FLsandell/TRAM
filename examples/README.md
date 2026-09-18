@@ -9,18 +9,17 @@ tram run \
   -m /path/to/genotypes.tsv \
   -g /path/to/phenotypes.tsv \
   -t SP_CODE \
-  -1 Red \
-  -2 Fodder \
+  -1 Group_A \
+  -2 Group_B \
   -c /path/to/chromosomes.tsv \
   --gff /path/to/genes.gff3 \
   -d /path/to/go_terms.tsv \
   -f /path/to/functional_annotations.tsv \
   -r 0.42 \
   --rounds 100 \
-  -o outputs/red-fodder
+  -o outputs/group-a-group-b
 ```
 
 For an initial infrastructure check, reduce runtime with `--rounds 2`,
 `--replicates 2`, and `--randomizations 10`. Those reduced settings are not
 intended for biological interpretation.
-

@@ -22,8 +22,8 @@ def test_modeling_and_sliding_window_smoke(tiny_data, tmp_path):
         matrix=tiny_data["matrix"],
         groups=tiny_data["groups"],
         target="SP_CODE",
-        group1="Red",
-        group2="Fodder",
+        group1="Group_A",
+        group2="Group_B",
         output=output,
         model=tiny_data["model"],
         replicates=2,
@@ -134,14 +134,14 @@ def test_model_summary_counts_only_nonzero_importance_runs(tiny_data, tmp_path):
         matrix=tiny_data["matrix"],
         groups=tiny_data["groups"],
         target="SP_CODE",
-        group1="Red",
-        group2="Fodder",
+        group1="Group_A",
+        group2="Group_B",
         output=tmp_path / "output",
         model=model,
         replicates=3,
         jobs=1,
     )
-    varimp = pd.read_csv(summary.parent / "RF_VarImp_Red-Fodder.csv", sep="\t")
+    varimp = pd.read_csv(summary.parent / "RF_VarImp_Group_A-Group_B.csv", sep="\t")
     table = pd.read_csv(summary, sep="\t")
 
     assert (varimp["VarImp"] > 0).all()
@@ -165,8 +165,8 @@ def test_replicates_fit_one_hot_encoder_only_once(tiny_data, tmp_path, monkeypat
         matrix=tiny_data["matrix"],
         groups=tiny_data["groups"],
         target="SP_CODE",
-        group1="Red",
-        group2="Fodder",
+        group1="Group_A",
+        group2="Group_B",
         output=tmp_path / "output",
         model=tiny_data["model"],
         replicates=3,
@@ -299,8 +299,8 @@ def test_complete_pipeline_writes_metadata(tiny_data, tmp_path):
         matrix=tiny_data["matrix"],
         groups=tiny_data["groups"],
         target="SP_CODE",
-        group1="Red",
-        group2="Fodder",
+        group1="Group_A",
+        group2="Group_B",
         chromosome=tiny_data["chromosome"],
         gff=tiny_data["gff"],
         database=tiny_data["database"],
